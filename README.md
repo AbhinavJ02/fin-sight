@@ -14,7 +14,7 @@ failure diagnosis, and counterfactual validation of fixes, on real SEC and FinQA
 
 ## Quickstart
 ```bash
-pip install -e ".[dev,spark,local]"   # spark tests need Java 17
+pip install -e ".[dev,spark,local,retrieval]"   # spark tests need Java 17
 ./scripts/fetch_finqa.sh data/external/FinQA
 python -m finsight.ingestion.finqa --src data/external/FinQA
 pytest -q

@@ -10,7 +10,6 @@ import argparse
 import hashlib
 import json
 import shutil
-import subprocess
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +17,7 @@ from pathlib import Path
 import yaml
 
 from finsight.calc.program import ProgramError, execute, numbers_match, parse_number
+from finsight.provenance import git_commit
 from finsight.schemas.finqa import (
     Document,
     EvidenceKind,
@@ -38,7 +38,7 @@ def ingest_bronze(src_dir: Path, splits: list[str], bronze_dir: Path) -> dict:
         files.append({"split": split, "path": dst.name, "sha256": _sha256(dst), "bytes": dst.stat().st_size})
     manifest = {
         "source": "FinQA",
-        "commit": _git_commit(src_dir),
+        "commit": git_commit(src_dir),
         "ingested_at": datetime.now(UTC).isoformat(),
         "files": files,
     }
@@ -48,13 +48,6 @@ def ingest_bronze(src_dir: Path, splits: list[str], bronze_dir: Path) -> dict:
 
 def _sha256(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
-
-
-def _git_commit(repo: Path) -> str | None:
-    try:
-        return subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return None
 
 
 # ---------- silver ----------

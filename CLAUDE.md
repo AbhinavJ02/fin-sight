@@ -37,7 +37,7 @@ Two goals, both first-class:
 - macOS, zsh. Python 3.11 via pyenv (`.python-version` in repo). Venv at `.venv`.
   Note: pyenv's global default on this machine is 3.9, so always work inside the venv.
 - Java 17 (Homebrew `openjdk@17`, `JAVA_HOME` set in `~/.zshrc`); needed for Spark tests.
-- Install: `pip install -e ".[dev,spark,local]"`
+- Install: `pip install -e ".[dev,spark,local,retrieval]"`
 - FinQA pinned at commit `0f16e2867befa6840783e58be38c9efb9229d742`;
   fetch with `./scripts/fetch_finqa.sh data/external/FinQA`.
 - Local ingestion: `python -m finsight.ingestion.finqa --src data/external/FinQA`
