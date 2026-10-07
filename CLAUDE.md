@@ -72,7 +72,7 @@ Two goals, both first-class:
 - [x] Stage 1: FinQA bronze -> silver locally, executor, label audit
 - [x] Stage 2 (code): PySpark pipeline + Fabric notebook + wheel; parity-tested
 - [ ] Stage 2 (Fabric, by hand): follow `docs/fabric-setup.md`
-- [ ] First push to GitHub + green CI run
+- [x] First push to GitHub + green CI run
 - [ ] Stage 3: evaluation harness + in-page retrieval baselines (BM25, dense, hybrid,
       cross-encoder rerank); Recall@3/5/10, MRR, NDCG; results to a Fabric Warehouse
 - [ ] Stage 4: SEC EDGAR + XBRL ingestion via Fabric pipelines (incremental loads);
