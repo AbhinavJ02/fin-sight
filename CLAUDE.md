@@ -31,7 +31,9 @@ Two goals, both first-class:
 - Show diffs and summarize changes before committing. Don't push without being asked.
 - The Fabric UI work is done by hand on purpose (it's the learning). Help with code that
   runs in Fabric, write step-by-step guides, and debug errors, but don't try to automate
-  the UI steps away.
+  the UI steps away. Stop at every Fabric step and hand it over; Fabric work comes before
+  the next local sub-stage (D8: Fabric is primary, not an end step).
+- Keep docs current as things change: decisions.md, fabric-setup.md, README, this file.
 
 ## Environment
 - macOS, zsh. Python 3.11 via pyenv (`.python-version` in repo). Venv at `.venv`.
@@ -41,7 +43,11 @@ Two goals, both first-class:
 - FinQA pinned at commit `0f16e2867befa6840783e58be38c9efb9229d742`;
   fetch with `./scripts/fetch_finqa.sh data/external/FinQA`.
 - Local ingestion: `python -m finsight.ingestion.finqa --src data/external/FinQA`
-- Tests: `pytest -q` (27 tests; Spark parity tests take about 45 s).
+- Tests: `pytest -q` (51 tests; about 10 s on this machine). Run with the venv activated
+  (or `.venv/bin` first on PATH): Spark's Python workers start whatever `python3` is on PATH,
+  and pyenv's interpreter fails with `ModuleNotFoundError: yaml`.
+- Retrieval eval: `python -m finsight.eval.retrieval --split dev --grid` (dev only);
+  `--split test --write` appends to gold tables and refuses to run from a dirty tree.
 - Lint: `ruff check src tests`
 
 ## Repository map
@@ -51,8 +57,12 @@ Two goals, both first-class:
 - `src/finsight/spark/finqa_silver.py`: same transforms in PySpark (runs in Fabric).
 - `src/finsight/spark/delta_io.py`: idempotent Delta MERGE helper.
 - `src/finsight/storage/lakehouse.py`: local Delta I/O (`deltalake`, local-only extra).
-- `notebooks/nb_finqa_bronze_to_silver.ipynb`: Fabric notebook (parameter cell, exit value).
-- `docs/decisions.md`: decision log D1-D10. Read it before changing data logic.
+- `src/finsight/eval/`: retrieval metrics (+ exact random baseline), bootstrap, harness/CLI.
+- `src/finsight/retrieval/`: retriever interface, tokenizer, in-page BM25.
+- `src/finsight/schemas/eval.py`: gold-layer run and per-question result models.
+- `notebooks/nb_finqa_bronze_to_silver.ipynb`: Fabric notebook (parameter cell, schema setup,
+  exit value).
+- `docs/decisions.md`: decision log D1-D14. Read it before changing data logic.
 - `docs/fabric-setup.md`: Stage 2 Fabric guide (capacity, lakehouse, Environment, pipeline).
 - `.github/workflows/ci.yml`: lint, tests (incl. Spark), builds the wheel artifact.
 
@@ -61,11 +71,14 @@ Two goals, both first-class:
   135 tickers, 1999-2019. MIT license. `private_test` has no answers; excluded.
 - FinQA is page-level: report in-page and corpus-level retrieval separately, never mixed.
 - Executor reproduces FinQA `exe_ans` on 100% of questions.
+- In-page BM25 (test): AllGold@5 0.694, Recall@5 0.808, MRR 0.724; random 0.115 / 0.197 / 0.196.
 - Test-split label status: 933 consistent, 86 rounding, 81 conflict, 27 non-numeric,
   20 boolean. Headline accuracy excludes `conflict`; conflicts seed DATA_FAILURE.
 - Percent-scale tolerance is opt-in; a 100x error is a failure, never a pass.
 - Spark and Python pipelines agree with 0 mismatches on the full dataset.
 - Fabric is the primary environment from Stage 2; local Spark keeps CI capacity-free.
+- Fabric layout (D14): lakehouse `lh_finsight` with schemas enabled (effectively permanent);
+  schemas `bronze`, `silver`, `gold`; tables named `schema.table`, e.g. `silver.finqa_questions`.
 - SEC access: declared User-Agent with contact email, target 5 req/s (limit 10), cache everything.
 
 ## Status
@@ -73,8 +86,13 @@ Two goals, both first-class:
 - [x] Stage 2 (code): PySpark pipeline + Fabric notebook + wheel; parity-tested
 - [ ] Stage 2 (Fabric, by hand): follow `docs/fabric-setup.md`
 - [x] First push to GitHub + green CI run
-- [ ] Stage 3: evaluation harness + in-page retrieval baselines (BM25, dense, hybrid,
-      cross-encoder rerank); Recall@3/5/10, MRR, NDCG; results to a Fabric Warehouse
+- [ ] Stage 3: evaluation harness + in-page retrieval baselines; results to a Fabric Warehouse
+  - [x] 3a (local): harness, metrics, BM25 baseline (D11-D13)
+  - [ ] 3a (Fabric, by hand): eval notebook, gold tables in the `gold` schema, run summaries to
+        the Warehouse (long format: one row per run x metric). Needs Stage 2 Fabric first.
+  - [ ] 3b: dense (BGE) + hybrid (RRF)
+  - [ ] 3c: cross-encoder rerank (full page vs hybrid top-N)
+  - Deferred: Azure OpenAI embeddings (after 3c), corpus-level setting (D2)
 - [ ] Stage 4: SEC EDGAR + XBRL ingestion via Fabric pipelines (incremental loads);
       ~20 companies first; XBRL facts as verifiable answers for a held-out SEC question set
 - [ ] Stage 5: answer pipeline (LLM proposes program, executor computes) + OpenTelemetry traces
