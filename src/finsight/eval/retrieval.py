@@ -21,7 +21,7 @@ from pathlib import Path
 import yaml
 
 from finsight.eval.metrics import compute_all, expected_random, gold_ranks
-from finsight.eval.stats import bootstrap_ci
+from finsight.eval.stats import bootstrap_ci, paired_bootstrap
 from finsight.provenance import git_commit, git_dirty
 from finsight.retrieval.base import Retriever
 from finsight.retrieval.bm25 import BM25Retriever
@@ -31,6 +31,9 @@ from finsight.schemas.finqa import EvidenceUnit, Question
 HEADLINE = ("recall@3", "recall@5", "recall@10", "all_gold@3", "all_gold@5",
             "all_gold@10", "rr", "ndcg@5", "ndcg@10")
 SILVER_TABLES = ("finqa_documents", "finqa_evidence_units", "finqa_questions")
+# Stage 5 builds a program from the retrieved units, so it needs *all* of them (D12).
+SELECTION_METRIC = "all_gold@5"
+COMPARE_METRICS = (SELECTION_METRIC, "ndcg@10", "recall@3")
 
 
 def group_units(units: Iterable[EvidenceUnit]) -> dict[str, list[EvidenceUnit]]:
@@ -105,6 +108,28 @@ def build_run(run_id: str, split: str, retriever: Retriever,
     )
 
 
+def compare_to_best(runs: dict[str, Sequence[RetrievalQuestionResult]],
+                    metrics: Sequence[str] = COMPARE_METRICS) -> tuple[str, dict[str, dict]]:
+    """Paired bootstrap of every config against the best one on SELECTION_METRIC.
+
+    Returns (best label, {label: {metric: (diff, low, high)}}). A config whose interval
+    includes 0 is indistinguishable from the best on this split.
+    """
+    def mean(rs):
+        return sum(r.metrics[SELECTION_METRIC] for r in rs) / len(rs)
+
+    best = max(runs, key=lambda k: mean(runs[k]))
+    ref = {r.question_id: r for r in runs[best]}
+    out = {}
+    for label, rs in runs.items():
+        if label == best:
+            continue
+        ordered = [ref[r.question_id] for r in rs]
+        out[label] = {m: paired_bootstrap([r.metrics[m] for r in rs], [r.metrics[m] for r in ordered])
+                      for m in metrics}
+    return best, out
+
+
 def format_run(run: RetrievalRun) -> str:
     ci = json.loads(run.breakdown_json)["overall_ci95"]
     lines = [f"{run.split} | {run.retriever} {run.params_json} | n={run.n_questions}",
@@ -170,10 +195,12 @@ def main() -> None:
                                     stopwords=not args.no_stopwords, idf_scope=args.idf_scope,
                                     corpus=train_units if args.idf_scope == "corpus" else None)]
 
+    by_config: dict[str, list[RetrievalQuestionResult]] = {}
     for retriever in retrievers:
         run_id = f"{datetime.now(UTC):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}"
         results = evaluate(retriever, qs, units_by_doc, run_id)
         run = build_run(run_id, args.split, retriever, results, versions, repo)
+        by_config[run.params_json] = results
         print(format_run(run), end="\n\n")
         if args.write:
             from finsight.storage.lakehouse import write_table
@@ -181,6 +208,13 @@ def main() -> None:
             write_table(root / "gold" / "finqa_retrieval_runs", [run], mode="append")
             write_table(root / "gold" / "finqa_retrieval_results", results, mode="append")
             print(f"wrote run {run.run_id}")
+
+    if len(by_config) > 1:
+        best, diffs = compare_to_best(by_config)
+        print(f"paired bootstrap vs best on {SELECTION_METRIC}: {best}")
+        for label, ms in diffs.items():
+            cells = "  ".join(f"{m} {d:+.3f} [{lo:+.3f}, {hi:+.3f}]" for m, (d, lo, hi) in ms.items())
+            print(f"  {label}\n    {cells}")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from finsight.eval.retrieval import HEADLINE, build_run, evaluate, group_units
+from finsight.eval.retrieval import (
+    HEADLINE,
+    build_run,
+    compare_to_best,
+    evaluate,
+    group_units,
+)
 from finsight.ingestion.finqa import transform_record
 from finsight.retrieval.bm25 import BM25Retriever
 
@@ -72,3 +78,13 @@ def test_partial_ranking_is_rejected():
     questions, by_doc = _fixture_silver()
     with pytest.raises(ValueError, match="full ranking"):
         evaluate(Truncating(), questions, by_doc, "r3")
+
+
+def test_compare_to_best_pairs_by_question():
+    questions, by_doc = _fixture_silver()
+    oracle = evaluate(Oracle(questions), questions, by_doc, "o")
+    bm25 = list(reversed(evaluate(BM25Retriever(), questions, by_doc, "b")))  # order must not matter
+    best, diffs = compare_to_best({"oracle": oracle, "bm25": bm25})
+    assert best == "oracle"
+    d, lo, hi = diffs["bm25"]["all_gold@5"]
+    assert d <= 0 and lo <= d <= hi
