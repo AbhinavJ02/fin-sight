@@ -27,6 +27,11 @@ def _tiebreak(unit_id: str) -> str:
     return hashlib.sha1(unit_id.encode()).hexdigest()
 
 
+# Scores equal to this many decimals are ties. Mathematically equal scores can differ in
+# the last bits depending on how they were summed; those must go to the tiebreak too.
+SCORE_DECIMALS = 9
+
+
 def rank_by_score(scores: dict[str, float]) -> list[str]:
     """Sort by score descending; break ties by a hash of unit_id.
 
@@ -34,4 +39,4 @@ def rank_by_score(scores: dict[str, float]) -> list[str]:
     Breaking ties in page order would reward a retriever for wherever gold evidence
     tends to sit on the page; a hash is order-free and still reproducible.
     """
-    return sorted(scores, key=lambda uid: (-scores[uid], _tiebreak(uid)))
+    return sorted(scores, key=lambda uid: (-round(scores[uid], SCORE_DECIMALS), _tiebreak(uid)))

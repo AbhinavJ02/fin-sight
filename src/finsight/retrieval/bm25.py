@@ -9,7 +9,7 @@ implementation in tests/test_bm25.py (D11).
 Scoring matches bm25s method="lucene":
     idf(t)   = ln(1 + (N - df + 0.5) / (df + 0.5))
     tf_c(t)  = tf / (tf + k1 * (1 - b + b * dl / avgdl))
-    score(d) = sum over unique query terms of idf(t) * tf_c(t)
+    score(d) = sum over unique query terms (in sorted order) of idf(t) * tf_c(t)
 """
 
 from __future__ import annotations
@@ -43,7 +43,9 @@ def bm25_scores(query: list[str], docs: Sequence[list[str]], k1: float, b: float
     if stats is None:
         stats = CorpusStats(docs)
     avgdl = sum(len(d) for d in docs) / len(docs) or 1.0
-    terms = set(query)
+    # Sorted, not a set: float addition is order-dependent, and set order varies between
+    # processes, so exact ties could flip on the last bit from run to run (D12).
+    terms = sorted(set(query))
     idfs = {t: idf(stats.df.get(t, 0), stats.n) for t in terms}
     scores = []
     for d in docs:

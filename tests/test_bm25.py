@@ -59,6 +59,19 @@ def test_rank_is_full_deterministic_and_ties_are_order_free():
     assert rank_by_score({"a": 0.0, "b": 0.0, "c": 0.0}) == rank_by_score({"c": 0.0, "a": 0.0, "b": 0.0})
 
 
+def test_scores_do_not_depend_on_query_term_order():
+    docs = [tokenize(d) for d in DOCS]
+    q = tokenize("total debt interest expense revenue 2015 2014")
+    assert bm25_scores(q, docs, 1.2, 0.75) == bm25_scores(list(reversed(q)), docs, 1.2, 0.75)
+
+
+def test_last_bit_differences_are_ties():
+    # 0.1 + 0.2 + 0.3 != 0.3 + 0.2 + 0.1 in floating point; ranking must not care.
+    a, b = 0.1 + 0.2 + 0.3, 0.3 + 0.2 + 0.1
+    assert a != b
+    assert rank_by_score({"x": a, "y": b}) == rank_by_score({"x": b, "y": a})
+
+
 def test_corpus_scope_requires_corpus():
     with pytest.raises(ValueError):
         BM25Retriever(idf_scope="corpus")
