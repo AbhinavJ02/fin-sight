@@ -1,0 +1,25 @@
+[project]
+name = "finsight"
+version = "0.1.0"
+description = "Financial AI reliability & intelligence platform"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7",
+  "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+spark = ["pyspark==3.5.*"]   # matches Fabric Runtime 1.3
+local = ["pyarrow>=15", "deltalake>=0.18"]   # local Delta I/O; Fabric uses Spark
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

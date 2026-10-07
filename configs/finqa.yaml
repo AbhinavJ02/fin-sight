@@ -1,0 +1,10 @@
+# FinQA benchmark source. Pinned to a commit so the benchmark is reproducible.
+source:
+  repo: https://github.com/czyssrs/FinQA
+  license: MIT
+splits: [train, dev, test]   # private_test has no answers; excluded
+lakehouse_root: data/lakehouse
+# Numeric tolerance used everywhere a FinQA answer is compared.
+answer_tolerance:
+  rel: 0.01
+  abs: 0.005
