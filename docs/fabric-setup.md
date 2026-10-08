@@ -58,10 +58,9 @@ Parameters: `commit` (string, `0f16e2867befa6840783e58be38c9efb9229d742`),
 - **Confirm the tables landed in the schemas**, not in `dbo`: in the lakehouse explorer you
   should see `bronze.finqa_records` and the three `silver.finqa_*` tables. On the first run,
   the notebook's `results` cell should show `"created"` for all three silver tables, and
-  `"merged"` on every run after that. `merge_into` (`spark.catalog.tableExists` +
-  `DeltaTable.forName`) was verified with schema-qualified names on local Spark 3.5 + Delta
-  3.2, but not against Fabric's catalog; this run is that check. If a silver table shows
-  `"created"` twice, or one appears under `dbo`, stop and report it.
+  `"merged"` on every run after that. This is how `merge_into` shows it handles
+  schema-qualified names (verified in Fabric, D14). If a silver table shows `"created"`
+  twice, or one appears under `dbo`, stop and report it.
 - In the SQL analytics endpoint:
   ```sql
   SELECT split, COUNT(*) AS n FROM silver.finqa_questions GROUP BY split;
@@ -75,14 +74,34 @@ Parameters: `commit` (string, `0f16e2867befa6840783e58be38c9efb9229d742`),
   - *Learn:* idempotency; append-only bronze vs. upserted silver.
 
 ## 7. Break it on purpose
-- Upload a copy of `test.json` renamed `dev.json` into the bronze folder and rerun the notebook.
-  The quality check should fail with "pages appear in more than one split", the notebook
-  should fail, and the `silver.finqa_*` counts should be unchanged. Restore the real
-  `dev.json` afterwards.
+- On your Mac, make the bad file: `cp data/external/FinQA/dataset/test.json ~/Desktop/finqa_break/dev.json`
+  (it must be named `dev.json`).
+- Replace `dev.json` in `Files/bronze/finqa/<commit>/`. **Drag and drop** onto the folder in
+  the lakehouse Explorer worked; the **Upload** menu did not replace the file in our run.
+  Deleting the real `dev.json` first and then dropping the new one in is the most reliable.
+- **Check the swap before running anything**, in a temporary notebook cell:
+  ```python
+  for f in notebookutils.fs.ls(f"Files/bronze/finqa/{source_commit}/"):
+      print(f.name, f.size)
+  ```
+  `dev.json` must show 14395143 bytes (the size of `test.json`); the real one is 10954658.
+  Our first attempt skipped this check and silently ran on the real files.
+- Set a distinct `run_id` in the parameter cell (e.g. `break_test`), then **Run all**. The
+  quality-check cell should fail with
+  `FinQA silver quality checks failed: ['1147 duplicate question_ids', '380 pages appear in more than one split']`
+  and nothing after it runs. Bronze gains 8,545 rows for this run (6,251 + 1,147 + 1,147).
+- Restore the real `dev.json` (`data/external/FinQA/dataset/dev.json`, same pinned commit),
+  check the listing shows 10954658 again, and set `run_id` back.
 - Expect `bronze.finqa_records` to gain this bad run anyway: bronze is append-only and is
   written before the quality check. That's by design (bronze records what arrived); its
   `_run_id` identifies it.
   - *Learn:* failure handling, and what a failed run looks like in Monitor, before it matters at work.
+
+## Gotchas we hit
+- **Files tree looks empty.** The Explorer caches the Files tree; refresh it and expand the
+  folders. `notebookutils.fs.ls("Files/...")` shows the truth.
+- **Every hand-started run is `run_id = "manual"`**, so bronze can't tell those runs apart.
+  Give each manual run its own `run_id` in the parameter cell.
 
 ## What to report back
 - The notebook's exit value from the Monitor hub (step 5).

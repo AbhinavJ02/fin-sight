@@ -157,7 +157,28 @@ Consequences:
   creating them in the lakehouse explorer.
 - The Files area is unchanged: raw JSON still lands in `Files/bronze/finqa/<commit>/`.
 - `merge_into` takes the qualified name as is. Verified locally on Spark 3.5.9 + Delta 3.2.1
-  (create, then merge, rerun idempotent, table lands in `silver` not `default`); not yet
-  verified against Fabric's catalog. The first Fabric run is that check (fabric-setup.md, step 6).
+  (create, then merge, rerun idempotent, table lands in `silver` not `default`), then in
+  Fabric (below).
 - Stage 3 gold tables go in the `gold` schema. Local paths already mirror the layout
   (`data/lakehouse/silver/finqa_questions`).
+
+**Verified in Fabric (2026-10-08).** `lh_finsight` created with Lakehouse schemas enabled;
+the notebook's `CREATE SCHEMA IF NOT EXISTS` cell ran without error and no Explorer fallback
+was needed. Tables landed in `bronze` / `silver`, queryable by `schema.table` in the SQL
+analytics endpoint.
+- First run (pipeline, `_run_id` = pipeline RunId): `merge_into` returned `created` for all
+  three silver tables. Reruns returned `merged` for all three, so both branches of
+  `merge_into` (`tableExists` + `saveAsTable`, and `DeltaTable.forName` + MERGE) work with
+  schema-qualified names in Fabric's catalog.
+- Silver matches the local pipeline exactly: questions train 6,251 / dev 883 / test 1,147;
+  documents 2,789; evidence units 86,421; executor agreement 1.0; label status 6,785
+  consistent / 565 rounding / 569 conflict / 208 non-numeric / 154 boolean.
+- Reruns are idempotent: after a rerun, silver counts were unchanged (questions by split,
+  evidence units 86,421) while bronze held one 8,281-row block per run.
+- Failure test (step 7): with `test.json` copied over `dev.json`, bronze took 8,545 rows
+  (6,251 + 1,147 + 1,147) and the quality gate raised `FinQA silver quality checks failed:
+  ['1147 duplicate question_ids', '380 pages appear in more than one split']`. The notebook
+  stopped at that cell, before `merge_into`. Silver being untouched is inferred from that
+  stop; a later real-data rerun merged on top, so counts alone can't show it.
+- Observed gotcha: all hand-started runs share `run_id = "manual"`, so bronze holds 24,843
+  `manual` rows (3 runs x 8,281) that can't be told apart by `_run_id`.

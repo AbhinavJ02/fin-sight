@@ -75,7 +75,8 @@ Two goals, both first-class:
 - Test-split label status: 933 consistent, 86 rounding, 81 conflict, 27 non-numeric,
   20 boolean. Headline accuracy excludes `conflict`; conflicts seed DATA_FAILURE.
 - Percent-scale tolerance is opt-in; a 100x error is a failure, never a pass.
-- Spark and Python pipelines agree with 0 mismatches on the full dataset.
+- Spark and Python pipelines agree with 0 mismatches on the full dataset; the Fabric run
+  reproduces the same silver counts and label-status counts (D14).
 - Fabric is the primary environment from Stage 2; local Spark keeps CI capacity-free.
 - Fabric layout (D14): lakehouse `lh_finsight` with schemas enabled (effectively permanent);
   schemas `bronze`, `silver`, `gold`; tables named `schema.table`, e.g. `silver.finqa_questions`.
@@ -84,12 +85,14 @@ Two goals, both first-class:
 ## Status
 - [x] Stage 1: FinQA bronze -> silver locally, executor, label audit
 - [x] Stage 2 (code): PySpark pipeline + Fabric notebook + wheel; parity-tested
-- [ ] Stage 2 (Fabric, by hand): follow `docs/fabric-setup.md`
+- [x] Stage 2 (Fabric, by hand): pipeline + notebook in `lh_finsight`; silver matches local exactly;
+      reruns idempotent; quality gate verified (D14)
 - [x] First push to GitHub + green CI run
 - [ ] Stage 3: evaluation harness + in-page retrieval baselines; results to a Fabric Warehouse
   - [x] 3a (local): harness, metrics, BM25 baseline (D11-D13)
   - [ ] 3a (Fabric, by hand): eval notebook, gold tables in the `gold` schema, run summaries to
-        the Warehouse (long format: one row per run x metric). Needs Stage 2 Fabric first.
+        the Warehouse (long format: one row per run x metric).
+        Also: ingest notebook gives hand-started runs a unique `run_id` (not a shared "manual").
   - [ ] 3b: dense (BGE) + hybrid (RRF)
   - [ ] 3c: cross-encoder rerank (full page vs hybrid top-N)
   - Deferred: Azure OpenAI embeddings (after 3c), corpus-level setting (D2)
